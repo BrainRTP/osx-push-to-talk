@@ -43,6 +43,14 @@ final class Microphone {
                 MainActor.assumeIsolated { self?.refreshDevices() }
             }
         }
+        // Some apps unmute the input device behind our back: re-apply mute every 0.2 s.
+        let timer = Timer(timeInterval: 0.2, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.status.isMuted else { return }
+                self.applyStatus()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     func setupDeviceMenu(_ menu: NSMenu) {
@@ -100,7 +108,9 @@ final class Microphone {
     private func setMuted(_ muted: Bool, on device: InputDevice) {
         for element in device.muteElements {
             var address = Self.address(kAudioDevicePropertyMute, scope: kAudioDevicePropertyScopeInput, element: element)
-            let size = UInt32(MemoryLayout<UInt32>.size)
+            var size = UInt32(MemoryLayout<UInt32>.size)
+            var current: UInt32 = 0
+            if AudioObjectGetPropertyData(device.id, &address, 0, nil, &size, &current) == noErr, (current != 0) == muted { continue }
             var value: UInt32 = muted ? 1 : 0
             let result = AudioObjectSetPropertyData(device.id, &address, 0, nil, size, &value)
             if result != noErr {
