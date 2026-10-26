@@ -74,15 +74,18 @@ class HotKey {
 
     internal func handleFlagChangedEvent(_ theEvent: NSEvent!) {
         if self.recordingHotKey {
+            let flags = theEvent.modifierFlags.intersection([.shift, .control, .option, .command, .function])
+            guard !flags.isEmpty else { return } // caps lock and similar keys carry no modifier flag
             self.recordingHotKey = false
             self.keyCode = theEvent.keyCode
-            self.modifierFlags = theEvent.modifierFlags
+            self.modifierFlags = flags
             let keyString = KeyCodeHelper.keyChars(keyCode: theEvent.keyCode)
             self.menuItem.title = "Change HotKey (\(keyString))"
 
-            UserDefaults.standard.set(self.keyCode, forKey: prefKeyCode)
-            UserDefaults.standard.set(self.modifierFlags.rawValue, forKey: prefModifiers)
-            return;
+            UserDefaults.standard.set(Int(self.keyCode), forKey: prefKeyCode)
+            UserDefaults.standard.set(Int(self.modifierFlags.rawValue), forKey: prefModifiers)
+            microphone.status = .muted
+            return
         }
         guard theEvent.keyCode == self.keyCode else { return }
         guard microphone.status != .disabled else { return }
