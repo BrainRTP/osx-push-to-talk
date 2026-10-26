@@ -10,7 +10,7 @@ import Cocoa
 
 @main
 
-class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemValidation {
 
     @IBOutlet weak var statusMenu: NSMenu!
     @IBOutlet weak var menuItemToggle: NSMenuItem!
@@ -19,7 +19,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     
     var microphone = Microphone()
     var hotkey: HotKey?
-    private let volumeItem = NSMenuItem(title: "Input volume: -", action: nil, keyEquivalent: "")
+    private let volumeLabel = NSTextField(labelWithString: "Input volume: -")
+    private let volumeSlider = NSSlider(value: 0, minValue: 0, maxValue: 100, target: nil, action: nil)
+    private let volumeItem = NSMenuItem()
+    private let lockVolumeItem = NSMenuItem(title: "Lock input volume", action: #selector(toggleVolumeLock(_:)), keyEquivalent: "")
     private var wasMuted = true
     private var quitting = false
     
@@ -34,8 +37,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         self.hotkey = HotKey(microphone: microphone, menuItem: hotkeyMenuItem)
 
         statusMenu.delegate = self
+        setUpVolumeItems()
         statusMenu.insertItem(volumeItem, at: 0)
-        statusMenu.insertItem(.separator(), at: 1)
+        statusMenu.insertItem(lockVolumeItem, at: 1)
+        statusMenu.insertItem(.separator(), at: 2)
         statusItem.menu = statusMenu
         self.microphone.statusUpdated = { (status) in
             self.menuItemToggle.title = status.toggleTitle
@@ -54,7 +59,44 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func menuWillOpen(_ menu: NSMenu) {
-        volumeItem.title = microphone.inputVolume().map { "Input volume: \(Int(($0 * 100).rounded()))%" } ?? "Input volume: n/a"
+        if let volume = microphone.inputVolume() {
+            volumeSlider.isEnabled = true
+            volumeSlider.doubleValue = Double(volume * 100)
+            volumeLabel.stringValue = "Input volume: \(Int((volume * 100).rounded()))%"
+        } else {
+            volumeSlider.isEnabled = false
+            volumeLabel.stringValue = "Input volume: n/a"
+        }
+        lockVolumeItem.state = microphone.lockedInputVolume == nil ? .off : .on
+    }
+
+    private func setUpVolumeItems() {
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: 220, height: 46))
+        volumeLabel.frame = NSRect(x: 14, y: 26, width: 192, height: 17)
+        volumeLabel.font = NSFont.menuFont(ofSize: 0)
+        volumeSlider.frame = NSRect(x: 14, y: 4, width: 192, height: 20)
+        volumeSlider.isContinuous = true
+        volumeSlider.target = self
+        volumeSlider.action = #selector(volumeSliderMoved(_:))
+        view.addSubview(volumeLabel)
+        view.addSubview(volumeSlider)
+        volumeItem.view = view
+        lockVolumeItem.target = self
+    }
+
+    @objc private func volumeSliderMoved(_ slider: NSSlider) {
+        let volume = Float(slider.doubleValue / 100)
+        microphone.setInputVolume(volume)
+        if microphone.lockedInputVolume != nil { microphone.lockedInputVolume = volume }
+        volumeLabel.stringValue = "Input volume: \(Int(slider.doubleValue.rounded()))%"
+    }
+
+    @objc private func toggleVolumeLock(_ sender: NSMenuItem) {
+        microphone.lockedInputVolume = microphone.lockedInputVolume == nil ? microphone.inputVolume() : nil
+    }
+
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        menuItem != lockVolumeItem || microphone.inputVolume() != nil
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {

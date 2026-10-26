@@ -15,6 +15,7 @@ struct InputDevice: Equatable {
     let uid: String
     let name: String
     let muteElements: [AudioObjectPropertyElement] // empty = no mute control
+    let volumeElements: [AudioObjectPropertyElement] // empty = no input volume control
 
     var supportsMute: Bool { !muteElements.isEmpty }
 }
@@ -22,11 +23,21 @@ struct InputDevice: Equatable {
 final class Microphone {
     private static let logger = Logger(subsystem: "com.yulrizka.PushToTalk", category: "microphone")
     private static let pinnedDeviceKey = "prefInputDeviceUID"
+    private static let lockedVolumeKey = "prefLockedInputVolume"
+    private static let lockedVolumeDeviceKey = "prefLockedInputVolumeDevice"
     private static let systemObject = AudioObjectID(kAudioObjectSystemObject)
 
     var statusUpdated: ((MicrophoneStatus) -> Void)?
     private(set) var selectedInput: InputDevice?
     private weak var deviceMenu: NSMenu?
+
+    // Input volume to restore whenever another app changes it; nil = not locked.
+    var lockedInputVolume: Float? = UserDefaults.standard.object(forKey: Microphone.lockedVolumeKey) as? Float {
+        didSet {
+            UserDefaults.standard.set(lockedInputVolume, forKey: Self.lockedVolumeKey)
+            UserDefaults.standard.set(lockedInputVolume == nil ? nil : selectedInput?.uid, forKey: Self.lockedVolumeDeviceKey)
+        }
+    }
 
     var status: MicrophoneStatus = .muted {
         didSet {
@@ -43,11 +54,12 @@ final class Microphone {
                 MainActor.assumeIsolated { self?.refreshDevices() }
             }
         }
-        // Some apps unmute the input device behind our back: re-apply mute every 0.2 s.
+        // Some apps unmute the input device or change its volume behind our back: re-apply every 0.2 s.
         let timer = Timer(timeInterval: 0.2, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self, self.status.isMuted else { return }
-                self.applyStatus()
+                guard let self else { return }
+                if self.status.isMuted { self.applyStatus() }
+                self.enforceLockedVolume()
             }
         }
         RunLoop.main.add(timer, forMode: .common)
@@ -70,6 +82,10 @@ final class Microphone {
             setMuted(false, on: old) // stop managing a device we no longer control
         }
         selectedInput = newSelection
+        // The locked level belongs to one device, also across launches.
+        if lockedInputVolume != nil, UserDefaults.standard.string(forKey: Self.lockedVolumeDeviceKey) != newSelection?.uid {
+            lockedInputVolume = nil
+        }
         applyStatus()
         statusUpdated?(status) // the icon depends on whether a device is controlled
 
@@ -102,14 +118,30 @@ final class Microphone {
 
     // 0...1, nil when the selected device has no input volume control.
     func inputVolume() -> Float? {
-        guard let device = selectedInput else { return nil }
-        for element in [kAudioObjectPropertyElementMain, AudioObjectPropertyElement(1)] {
+        guard let device = selectedInput, let element = device.volumeElements.first else { return nil }
+        var address = Self.address(kAudioDevicePropertyVolumeScalar, scope: kAudioDevicePropertyScopeInput, element: element)
+        var volume: Float32 = 0
+        var size = UInt32(MemoryLayout<Float32>.size)
+        return AudioObjectGetPropertyData(device.id, &address, 0, nil, &size, &volume) == noErr ? volume : nil
+    }
+
+    func setInputVolume(_ volume: Float) {
+        guard let device = selectedInput else { return }
+        for element in device.volumeElements {
             var address = Self.address(kAudioDevicePropertyVolumeScalar, scope: kAudioDevicePropertyScopeInput, element: element)
-            var volume: Float32 = 0
-            var size = UInt32(MemoryLayout<Float32>.size)
-            if AudioObjectGetPropertyData(device.id, &address, 0, nil, &size, &volume) == noErr { return volume }
+            var value = Float32(min(max(volume, 0), 1))
+            let result = AudioObjectSetPropertyData(device.id, &address, 0, nil, UInt32(MemoryLayout<Float32>.size), &value)
+            if result != noErr {
+                Self.logger.error("Failed to set the input volume of \(device.name, privacy: .public): OSStatus \(result)")
+            }
         }
-        return nil
+    }
+
+    private func enforceLockedVolume() {
+        guard let wanted = lockedInputVolume, let current = inputVolume(), abs(current - wanted) > 0.005 else { return }
+        setInputVolume(wanted)
+        // A device with coarse volume steps reports its nearest step: adopt it instead of rewriting forever.
+        if let actual = inputVolume(), abs(actual - wanted) > 0.005 { lockedInputVolume = actual }
     }
 
     @objc private func selectDevice(_ item: NSMenuItem) {
@@ -142,15 +174,17 @@ final class Microphone {
             guard channels > 0,
                   let uid = string(kAudioDevicePropertyDeviceUID, of: id),
                   let name = string(kAudioDevicePropertyDeviceNameCFString, of: id) else { return nil }
-            return InputDevice(id: id, uid: uid, name: name, muteElements: muteElements(of: id, channels: channels))
+            return InputDevice(id: id, uid: uid, name: name,
+                               muteElements: settableElements(of: id, property: kAudioDevicePropertyMute, channels: channels),
+                               volumeElements: settableElements(of: id, property: kAudioDevicePropertyVolumeScalar, channels: channels))
         }
     }
 
-    // The main element when the device has one mute switch, otherwise every channel that has its own.
-    private func muteElements(of id: AudioObjectID, channels: Int) -> [AudioObjectPropertyElement] {
+    // The main element when the device has one control, otherwise every channel that has its own.
+    private func settableElements(of id: AudioObjectID, property: AudioObjectPropertySelector, channels: Int) -> [AudioObjectPropertyElement] {
         let candidates = [kAudioObjectPropertyElementMain] + (1...channels).map { AudioObjectPropertyElement($0) }
         let settable = candidates.filter { element in
-            var address = Self.address(kAudioDevicePropertyMute, scope: kAudioDevicePropertyScopeInput, element: element)
+            var address = Self.address(property, scope: kAudioDevicePropertyScopeInput, element: element)
             var flag: DarwinBoolean = false
             return AudioObjectHasProperty(id, &address)
                 && AudioObjectIsPropertySettable(id, &address, &flag) == noErr && flag.boolValue
