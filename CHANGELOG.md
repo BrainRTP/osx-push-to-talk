@@ -13,7 +13,8 @@ All notable changes to this project will be documented in this file. See [standa
 * the input volume of the controlled device is shown in the status menu
 * SF Symbol status icons with a distinct disabled state
 * sounds on mute and unmute (Pop and Tink); after a short tap the mute sound waits for the double-tap window so a double tap sounds once
-* input volume slider and a lock that restores the volume when another app changes it
+* input volume slider with Lock input volume; sound levels as submenus with presets
+* separate levels for the live and muted sounds (0% turns a sound off)
 * double tap toggles the lock; single presses never release it
 * `prefDoubleTapInterval` overrides the double-tap window
 * tools/taptimer.swift measures hotkey timings
