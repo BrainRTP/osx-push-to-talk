@@ -13,6 +13,12 @@ final class HotKey {
     private static let keyCodeKey = "prefKeyCode"
     private static let modifiersKey = "prefModifier"
     private static let defaultKeyCode: UInt16 = 61 // Right Option
+    private static let doubleTapIntervalKey = "prefDoubleTapInterval"
+
+    // Two presses closer than this toggle the lock; the system double-click speed unless overridden in preferences.
+    static var doubleTapInterval: TimeInterval {
+        UserDefaults.standard.object(forKey: doubleTapIntervalKey) as? Double ?? NSEvent.doubleClickInterval
+    }
 
     private let microphone: Microphone
     private let menuItem: NSMenuItem
@@ -77,10 +83,11 @@ final class HotKey {
         }
         guard event.keyCode == keyCode, microphone.status != .disabled else { return }
         if Self.matches(event.modifierFlags, hotkey: modifierFlags) {
-            // Pressed with no other modifier held. Two presses within the system double-click interval lock the mic open.
-            lockedOpen = event.timestamp - lastPressTime < NSEvent.doubleClickInterval
-            lastPressTime = event.timestamp
-            microphone.status = .speaking
+            // Pressed with no other modifier held. A double tap toggles the lock; a third press starts a new count.
+            let doubleTap = event.timestamp - lastPressTime < Self.doubleTapInterval
+            lastPressTime = doubleTap ? 0 : event.timestamp
+            if doubleTap { lockedOpen.toggle() }
+            microphone.status = doubleTap && !lockedOpen ? .muted : .speaking
         } else if !flags.isSuperset(of: modifierFlags), !lockedOpen {
             microphone.status = .muted
         }
