@@ -28,15 +28,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         statusItem.menu = statusMenu
         self.microphone.statusUpdated = { (status) in
-            self.menuItemToggle.title = status.title()
-            self.statusItem.button?.image = status.image()
+            self.menuItemToggle.title = status.toggleTitle
+            self.statusItem.button?.image = status.image
         }
-        self.microphone.status = .Muted
+        self.microphone.status = .muted
         self.refreshDevices(nil);
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {
-        self.microphone.status = .Speaking // leave the device unmuted
+        self.microphone.status = .disabled // leave the device unmuted
     }
     
     

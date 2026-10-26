@@ -16,7 +16,6 @@ class HotKey {
     let prefKeyCode = "prefKeyCode"
     let prefModifiers = "prefModifier"
 
-    var enabled = true
     let microphone: Microphone
     let menuItem: NSMenuItem
 
@@ -42,7 +41,7 @@ class HotKey {
 
 
         self.menuItem = menuItem
-        let keyString = KeyCodeHelper.KeyChars(keyCode: self.keyCode)
+        let keyString = KeyCodeHelper.keyChars(keyCode: self.keyCode)
         self.menuItem.title = "Change HotKey (\(keyString))"
 
         self.microphone = microphone
@@ -57,18 +56,13 @@ class HotKey {
     }
 
     func toggle() {
-        if (self.enabled == true) {
-            microphone.status = MicrophoneStatus.Speaking
-            self.enabled = false
-        } else {
-            microphone.status = MicrophoneStatus.Muted
-            self.enabled = true
-        }
+        doubletap = false
+        microphone.status = microphone.status == .disabled ? .muted : .disabled
     }
 
     func recordNewHotKey() {
         recordingHotKey = true;
-        microphone.status = MicrophoneStatus.HotKeySet
+        microphone.status = .recordingHotKey
     }
 
     func checkForDoubleTap() {
@@ -83,7 +77,7 @@ class HotKey {
             self.recordingHotKey = false
             self.keyCode = theEvent.keyCode
             self.modifierFlags = theEvent.modifierFlags
-            let keyString = KeyCodeHelper.KeyChars(keyCode: theEvent.keyCode)
+            let keyString = KeyCodeHelper.keyChars(keyCode: theEvent.keyCode)
             self.menuItem.title = "Change HotKey (\(keyString))"
 
             UserDefaults.standard.set(self.keyCode, forKey: prefKeyCode)
@@ -91,14 +85,14 @@ class HotKey {
             return;
         }
         guard theEvent.keyCode == self.keyCode else { return }
-        guard self.enabled else { return }
+        guard microphone.status != .disabled else { return }
 
         if theEvent.modifierFlags.contains(self.modifierFlags) {
             checkForDoubleTap()
-            microphone.status = .Speaking
+            microphone.status = .speaking
         } else {
             if (!self.doubletap) {
-                microphone.status = .Muted
+                microphone.status = .muted
                 doubletap = false
             }
         }

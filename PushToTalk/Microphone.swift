@@ -26,9 +26,9 @@ class Microphone {
      * @discussion
      *      This method calls necessary private methods to mute or unmute the microphone
      */
-    var status: MicrophoneStatus = .Muted {
+    var status: MicrophoneStatus = .muted {
         didSet {
-            self.setMuted(status == .Muted)
+            self.setMuted(status.isMuted)
             self.statusUpdated?(status)
         }
     }
@@ -43,7 +43,7 @@ class Microphone {
             return
         }
         self.selectedInput = first
-        self.setMuted(status == .Muted)
+        self.setMuted(status.isMuted)
         for device in devices {
             let item = DeviceMenuItem()
             item.inputDevice = device
@@ -60,7 +60,7 @@ class Microphone {
     @objc func itemSelected(item: DeviceMenuItem) {
         // Disable muting.
         let status = self.status
-        self.status = .Speaking
+        self.status = .speaking
         for i in item.menu!.items {
             i.state = NSControl.StateValue.off
         }
