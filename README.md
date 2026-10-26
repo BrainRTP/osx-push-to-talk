@@ -15,13 +15,13 @@ This is a fork of [yulrizka/osx-push-to-talk](https://github.com/yulrizka/osx-pu
 What the app does:
 
 - The hotkey (right ⌥ by default) turns the microphone on while it is held down and off again when it is released.
-- A double press leaves the microphone on, and the next press turns it off.
+- A double press keeps the microphone on; the next double press turns it off. Single presses work as usual and do not release the lock.
 - While other modifiers are held, the key is ignored, so combinations like ⌘⌥ do not turn the microphone on.
 - While the microphone is off, mute is reapplied every 0.2 seconds (sticky mute): if another program resets the input device, the mute comes back.
 - The app controls the default input device or the one you pinned in the menu. The choice is remembered, and the device list updates when devices are connected or disconnected.
 - The menu shows the input volume (sensitivity) of the controlled device, with a slider to change it and a lock that restores it when another app changes it.
 - The menu bar icon shows the state: microphone off, microphone on, app disabled, or waiting for a new key.
-- A sound marks every change: Pop when the microphone goes live, Tink when it is muted.
+- A sound marks every change: Pop when the microphone goes live, Tink when it is muted. After a short tap the mute sound waits for the double-tap window, so a double press gives one sound.
 
 ## 🏗️ Project architecture
 
@@ -44,6 +44,9 @@ osx-push-to-talk/
 ├── 🛠️ PushToTalk.xcodeproj/     # Xcode project
 │   ├── project.pbxproj          # macOS 14.0, Swift 6, MainActor by default in the app target
 │   └── xcshareddata/xcschemes/  # shared PushToTalk scheme together with the tests
+│
+├── 🛠️ tools/
+│   └── taptimer.swift           # ⏱️ measures hotkey hold and double-tap timings
 │
 ├── ⚙️ .github/
 │   └── workflows/Build.yaml     # CI: universal build and the PushToTalk.app artifact
@@ -116,20 +119,21 @@ Launch `PushToTalk.app`: an icon appears in the menu bar. To uninstall the app, 
 
 ## 🎛️ Usage
 
-After launch, an icon appears in the menu bar and the app has no Dock icon. The microphone is muted right away. The app does not request microphone access: mute is changed through a device property in CoreAudio. Every mute and unmute is confirmed by a sound: Pop when the microphone goes live, Tink when it is muted.
+After launch, an icon appears in the menu bar and the app has no Dock icon. The microphone is muted right away. The app does not request microphone access: mute is changed through a device property in CoreAudio. Every mute and unmute is confirmed by a sound: Pop when the microphone goes live, Tink when it is muted. Pop plays at once. Tink plays at once when the microphone is muted after a hold longer than the double-tap window; after a short tap Tink waits for the window, and a second press within the window cancels it, so a double press gives one sound.
 
 ### Hotkey
 
 - A new key is set with the `Change HotKey` menu item: choose it and press the modifier you want. While the app waits for a key, the microphone stays off.
 - Any of ⌥, ⌘, ⌃, ⇧ and fn works, left or right. The app watches only for modifier changes, so regular keys and Caps Lock do not work.
-- A second press within the system double-click interval (0.5 seconds by default, System Settings > Accessibility > Pointer Control > Double-click speed) counts as a double press. The microphone stays on until the next press.
+- A double press keeps the microphone on until the next double press turns it off. Single presses work as push-to-talk and never release this lock: while the lock is on, pressing and releasing the key changes nothing.
+- A second press within the double-tap window counts as a double press. The window is 0.3 seconds by default; the value of `prefDoubleTapInterval` in seconds overrides it, for example `defaults write com.yulrizka.PushToTalk prefDoubleTapInterval -float 0.35`.
 
 ### Menu bar icon
 
 | Icon                      | State                                                                                                                                                 |
 |---------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
 | 🔇 Crossed-out microphone | The microphone is off                                                                                                                                 |
-| 🟢 Green microphone       | The microphone is on: the key is held down or it was turned on with a double press                                                                    |
+| 🟢 Green microphone       | The microphone is on: the key is held down or the lock is on (double press)                                                                           |
 | ⚪ Gray microphone        | The app is disabled, the microphone is open. The icon looks the same if the input device has no mute (tooltip "The input device has no mute control") |
 | ⌨️ Keyboard               | The app is waiting for a new hotkey, the microphone is off                                                                                            |
 
@@ -147,7 +151,7 @@ After launch, an icon appears in the menu bar and the app has no Dock icon. The 
 
 ### Quitting and settings
 
-Quitting the app lifts the mute, and the microphone stays on. The same happens when you log out or shut down the Mac. If the process is killed (for example, with Force Quit), the device stays muted: launch the app and quit it again. The hotkey, the pinned device and the locked input volume are stored in `~/Library/Preferences/com.yulrizka.PushToTalk.plist`.
+Quitting the app lifts the mute, and the microphone stays on. The same happens when you log out or shut down the Mac. If the process is killed (for example, with Force Quit), the device stays muted: launch the app and quit it again. The hotkey, the pinned device, the locked input volume and the double-tap window (`prefDoubleTapInterval`, optional, set with `defaults write`) are stored in `~/Library/Preferences/com.yulrizka.PushToTalk.plist`.
 
 ## 🧪 Testing
 
@@ -159,6 +163,16 @@ Quitting the app lifts the mute, and the microphone stays on. The same happens w
 Tests run inside the app (app-hosted). The XCTest runner kills the test host before `applicationWillTerminate`, so under tests `AppDelegate` does not mute the microphone: it checks the `XCTestConfigurationFilePath` environment variable.
 
 CI does not run the tests: [.github/workflows/Build.yaml](.github/workflows/Build.yaml) builds the app, checks the architectures and saves the artifact. The workflow runs on a push to `master`, on a pull request and manually, on `macos-latest` with the newest non-beta Xcode.
+
+Tuning the double tap: `tools/taptimer.swift` measures how long you hold the hotkey and how fast you press it twice, with the same `NSEvent` monitors as the app, and suggests a double-tap window. Build and run it from the repository root, press the key the way you normally use it, then press Ctrl-C to print the summary. The optional argument is the key code to watch: by default the hotkey saved by the app, otherwise fn (63). If you never changed the hotkey in the app, pass 61 (right ⌥). The app reads `prefDoubleTapInterval` on every press, so a new value works without a restart.
+
+```bash
+# Build and run the timing tool; build/ is created if missing
+mkdir -p build && swiftc -O -o build/taptimer tools/taptimer.swift && build/taptimer
+
+# Set the double-tap window to 0.35 seconds
+defaults write com.yulrizka.PushToTalk prefDoubleTapInterval -float 0.35
+```
 
 ## 🩺 Troubleshooting
 
