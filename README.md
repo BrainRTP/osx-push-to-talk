@@ -19,8 +19,9 @@ What the app does:
 - While other modifiers are held, the key is ignored, so combinations like ⌘⌥ do not turn the microphone on.
 - While the microphone is off, mute is reapplied every 0.2 seconds (sticky mute): if another program resets the input device, the mute comes back.
 - The app controls the default input device or the one you pinned in the menu. The choice is remembered, and the device list updates when devices are connected or disconnected.
-- The menu shows the input volume (sensitivity) of the controlled device.
+- The menu shows the input volume (sensitivity) of the controlled device, with a slider to change it and a lock that restores it when another app changes it.
 - The menu bar icon shows the state: microphone off, microphone on, app disabled, or waiting for a new key.
+- A sound marks every change: Pop when the microphone goes live, Tink when it is muted.
 
 ## 🏗️ Project architecture
 
@@ -28,9 +29,9 @@ What the app does:
 osx-push-to-talk/
 │
 ├── 💻 PushToTalk/               # app sources, the PushToTalk target
-│   ├── AppDelegate.swift        # 🚀 launch, status bar menu, the input volume item
+│   ├── AppDelegate.swift        # 🚀 launch, status bar menu, volume slider and lock, sounds
 │   ├── HotKey.swift             # ⌨️ modifier monitor, double press, recording a new key
-│   ├── Microphone.swift         # 🎙️ CoreAudio: devices, mute, 0.2 s timer, connection listeners
+│   ├── Microphone.swift         # 🎙️ CoreAudio: devices, mute, input volume, 0.2 s timer, connection listeners
 │   ├── MicrophoneStatus.swift   # 🚦 microphone states and SF Symbols icons
 │   ├── KeyCode.swift            # 🔤 key codes and their labels for the menu item
 │   ├── Base.lproj/MainMenu.xib  # 📋 status bar menu
@@ -57,19 +58,19 @@ osx-push-to-talk/
 
 ## 🔧 Tech stack
 
-| Layer        | Technology                                                                               |
-|--------------|------------------------------------------------------------------------------------------|
-| Language     | Swift 6 (language mode), MainActor as the default isolation in the app target            |
-| UI           | AppKit: `NSStatusItem`, `NSMenu`, the menu in `MainMenu.xib`, SF Symbols icons           |
-| Audio        | CoreAudio HAL, C API (`AudioObject*`): device list, mute, input volume, change listeners |
-| Keyboard     | `NSEvent`: a global and a local `flagsChanged` monitor, that is, modifiers only          |
-| Settings     | `UserDefaults`: the hotkey and the UID of the pinned device                              |
-| Logs         | `os.Logger`                                                                              |
-| Platform     | macOS 14.0 or newer, universal binary (arm64 + x86_64)                                   |
-| Build        | Xcode 26 or newer, `xcodebuild`, ad hoc signing                                          |
-| Tests        | XCTest                                                                                   |
-| CI           | GitHub Actions, `macos-latest`                                                           |
-| Dependencies | Third-party: none                                                                        |
+| Layer        | Technology                                                                                                |
+|--------------|-----------------------------------------------------------------------------------------------------------|
+| Language     | Swift 6 (language mode), MainActor as the default isolation in the app target                             |
+| UI           | AppKit: `NSStatusItem`, `NSMenu`, the menu in `MainMenu.xib`, `NSSlider` in a menu item, SF Symbols icons |
+| Audio        | CoreAudio HAL, C API (`AudioObject*`): device list, mute, input volume, change listeners                  |
+| Keyboard     | `NSEvent`: a global and a local `flagsChanged` monitor, that is, modifiers only                           |
+| Settings     | `UserDefaults`: the hotkey, the UID of the pinned device and the locked input volume                      |
+| Logs         | `os.Logger`                                                                                               |
+| Platform     | macOS 14.0 or newer, universal binary (arm64 + x86_64)                                                    |
+| Build        | Xcode 26 or newer, `xcodebuild`, ad hoc signing                                                           |
+| Tests        | XCTest                                                                                                    |
+| CI           | GitHub Actions, `macos-latest`                                                                            |
+| Dependencies | Third-party: none                                                                                         |
 
 ## 🚀 Quick start
 
@@ -115,13 +116,13 @@ Launch `PushToTalk.app`: an icon appears in the menu bar. To uninstall the app, 
 
 ## 🎛️ Usage
 
-After launch, an icon appears in the menu bar and the app has no Dock icon. The microphone is muted right away. The app does not request microphone access: mute is changed through a device property in CoreAudio.
+After launch, an icon appears in the menu bar and the app has no Dock icon. The microphone is muted right away. The app does not request microphone access: mute is changed through a device property in CoreAudio. Every mute and unmute is confirmed by a sound: Pop when the microphone goes live, Tink when it is muted.
 
 ### Hotkey
 
 - A new key is set with the `Change HotKey` menu item: choose it and press the modifier you want. While the app waits for a key, the microphone stays off.
 - Any of ⌥, ⌘, ⌃, ⇧ and fn works, left or right. The app watches only for modifier changes, so regular keys and Caps Lock do not work.
-- A press repeated less than 0.2 seconds after the first one counts as a double press. The microphone stays on until the next press.
+- A second press within the system double-click interval (0.5 seconds by default, System Settings > Accessibility > Pointer Control > Double-click speed) counts as a double press. The microphone stays on until the next press.
 
 ### Menu bar icon
 
@@ -134,18 +135,19 @@ After launch, an icon appears in the menu bar and the app has no Dock icon. The 
 
 ### Menu
 
-| Item                      | What it does                                                                                                                                                          |
-|---------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `Input volume: N%`        | The input volume (sensitivity) of the controlled device, refreshed when the menu opens. `n/a` if there is no volume control                                           |
-| `Disable` / `Enable`      | `Disable` stops controlling the microphone and leaves it on (gray icon), `Enable` turns it off again                                                                  |
-| `Devices`                 | `System Default` follows the macOS input device. Choosing a device pins it. Devices without mute cannot be selected, for example the iPhone microphone via Continuity |
-| `Refresh Devices`         | Refreshes the list manually. Usually not needed: the list updates when devices are connected or disconnected and when the default device changes                      |
-| `Change HotKey (Right-⌥)` | Records a new key, the current one is in parentheses                                                                                                                  |
-| `Quit PushToTalk`         | Quits the app and lifts the mute                                                                                                                                      |
+| Item                        | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+|-----------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Input volume: N%` + slider | Shows and sets the input volume (sensitivity) of the controlled device, refreshed when the menu opens. The slider is disabled and the label says `n/a` when the device has no volume control                                                                                                                                                                                                                                                                                                                        |
+| `Lock input volume`         | Remembers the current input volume and restores it within 0.2 seconds whenever another app changes it (conferencing apps with automatic level adjustment do this). The check mark shows the lock is on; moving the slider moves the locked value. The lock belongs to the controlled device: it turns off when that device changes (you pick another one in `Devices`, or another device becomes the system default while `System Default` is selected). The item is disabled when the device has no volume control |
+| `Disable` / `Enable`        | `Disable` stops controlling the microphone and leaves it on (gray icon), `Enable` turns it off again                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `Devices`                   | `System Default` follows the macOS input device. Choosing a device pins it. Devices without mute cannot be selected, for example the iPhone microphone via Continuity                                                                                                                                                                                                                                                                                                                                               |
+| `Refresh Devices`           | Refreshes the list manually. Usually not needed: the list updates when devices are connected or disconnected and when the default device changes                                                                                                                                                                                                                                                                                                                                                                    |
+| `Change HotKey (Right-⌥)`   | Records a new key, the current one is in parentheses                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `Quit PushToTalk`           | Quits the app and lifts the mute                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ### Quitting and settings
 
-Quitting the app lifts the mute, and the microphone stays on. The same happens when you log out or shut down the Mac. If the process is killed (for example, with Force Quit), the device stays muted: launch the app and quit it again. The hotkey and the pinned device are stored in `~/Library/Preferences/com.yulrizka.PushToTalk.plist`.
+Quitting the app lifts the mute, and the microphone stays on. The same happens when you log out or shut down the Mac. If the process is killed (for example, with Force Quit), the device stays muted: launch the app and quit it again. The hotkey, the pinned device and the locked input volume are stored in `~/Library/Preferences/com.yulrizka.PushToTalk.plist`.
 
 ## 🧪 Testing
 
@@ -170,7 +172,7 @@ The app is ad hoc signed and not notarized. Remove the quarantine flag as descri
 
 ### People can't hear me even though the icon is green
 
-Check the input volume in the first menu item: some apps lower it. Raise it in System Settings > Sound > Input.
+Check the input volume in the menu and raise it with the slider. If it keeps dropping, turn on `Lock input volume`: some apps lower the system input level automatically.
 
 ### The icon is gray, the tooltip says "The input device has no mute control"
 

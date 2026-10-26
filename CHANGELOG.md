@@ -12,6 +12,8 @@ All notable changes to this project will be documented in this file. See [standa
 * the hotkey is ignored while other modifiers are held
 * the input volume of the controlled device is shown in the status menu
 * SF Symbol status icons with a distinct disabled state
+* sounds on mute and unmute (Pop and Tink)
+* input volume slider and a lock that restores the volume when another app changes it
 
 ### Bug Fixes
 
@@ -23,6 +25,7 @@ All notable changes to this project will be documented in this file. See [standa
 * the microphone stayed muted after logout, shutdown or a system-initiated quit (Quit used exit(0) and skipped the termination hook); a killed process still leaves it muted, see the README
 * devices without a mute control are listed disabled instead of being muted silently
 * the app no longer asks for microphone access it does not need
+* the double-tap lock used a fixed 0.2 s window; it now follows the system double-click interval
 
 ### Chores
 
