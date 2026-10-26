@@ -20,6 +20,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var microphone = Microphone()
     var hotkey: HotKey?
     private let volumeItem = NSMenuItem(title: "Input volume: -", action: nil, keyEquivalent: "")
+    private var wasMuted = true
+    private var quitting = false
     
     let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
@@ -41,6 +43,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // Never claim "muted" when no input device can be muted.
             self.statusItem.button?.image = (uncontrolled && status == .muted ? MicrophoneStatus.disabled : status).image
             self.statusItem.button?.toolTip = uncontrolled ? "The input device has no mute control" : nil
+            // Audible feedback on mute and unmute, except while quitting. A copy plays even while the previous sound is still playing.
+            if !self.quitting, status.isMuted != self.wasMuted {
+                (NSSound(named: status.isMuted ? "Tink" : "Pop")?.copy() as? NSSound)?.play()
+            }
+            self.wasMuted = status.isMuted
         }
         self.microphone.setupDeviceMenu(deviceMenu)
         self.microphone.status = .muted
@@ -51,6 +58,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {
+        quitting = true
         self.microphone.status = .disabled // leave the device unmuted
     }
     
