@@ -13,7 +13,6 @@ final class HotKey {
     private static let keyCodeKey = "prefKeyCode"
     private static let modifiersKey = "prefModifier"
     private static let defaultKeyCode: UInt16 = 61 // Right Option
-    private static let doubleTapInterval: TimeInterval = 0.2
 
     private let microphone: Microphone
     private let menuItem: NSMenuItem
@@ -78,8 +77,8 @@ final class HotKey {
         }
         guard event.keyCode == keyCode, microphone.status != .disabled else { return }
         if Self.matches(event.modifierFlags, hotkey: modifierFlags) {
-            // Pressed with no other modifier held.
-            lockedOpen = event.timestamp - lastPressTime < Self.doubleTapInterval
+            // Pressed with no other modifier held. Two presses within the system double-click interval lock the mic open.
+            lockedOpen = event.timestamp - lastPressTime < NSEvent.doubleClickInterval
             lastPressTime = event.timestamp
             microphone.status = .speaking
         } else if !flags.isSuperset(of: modifierFlags), !lockedOpen {
