@@ -8,7 +8,7 @@
 
 PushToTalk turns the microphone off and turns it back on for as long as you hold the hotkey. It works globally, in every app that records audio from the input device it controls (Google Meet, Zoom, Teams, Discord and others): the app toggles mute on the device itself, not in an individual program.
 
-![Animation of the app at work](https://user-images.githubusercontent.com/117752/96354725-0eabff00-10da-11eb-9539-6e159e7d588b.gif)
+![Animation of the app at work](docs/demo.gif)
 
 This is a fork of [yulrizka/osx-push-to-talk](https://github.com/yulrizka/osx-push-to-talk) with a native Apple Silicon build. The build is universal (arm64 + x86_64) and does not need Rosetta. This matters because from macOS 28 Rosetta will remain only for some older games, and Intel-only programs will not run there ([Apple](https://support.apple.com/en-us/102527)). The original does not build in Xcode 27: Xcode does not accept its deployment target 10.14. Some features were taken from forks and open pull requests of the original. The list is in the "Related projects" section.
 
