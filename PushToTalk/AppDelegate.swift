@@ -34,6 +34,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         self.microphone.status = .Muted
         self.refreshDevices(nil);
     }
+
+    func applicationWillTerminate(_ aNotification: Notification) {
+        self.microphone.status = .Speaking // leave the device unmuted
+    }
     
     
     // MARK: Menu item Actions
@@ -42,8 +46,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     @IBAction func menuItemQuitAction(_ sender: NSMenuItem) {
-        self.microphone.status = .Speaking
-        exit(0)
+        NSApp.terminate(nil)
     }
     
     @IBAction func refreshDevices(_ sender: NSMenuItem?) {
