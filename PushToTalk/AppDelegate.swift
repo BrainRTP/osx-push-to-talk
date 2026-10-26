@@ -10,7 +10,7 @@ import Cocoa
 
 @main
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @IBOutlet weak var window: NSWindow!
     @IBOutlet weak var statusMenu: NSMenu!
@@ -20,12 +20,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     var microphone = Microphone()
     var hotkey: HotKey?
+    private let volumeItem = NSMenuItem(title: "Input volume: -", action: nil, keyEquivalent: "")
     
     let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         self.hotkey = HotKey(microphone: microphone, menuItem: hotkeyMenuItem)
 
+        statusMenu.delegate = self
+        statusMenu.insertItem(volumeItem, at: 0)
+        statusMenu.insertItem(.separator(), at: 1)
         statusItem.menu = statusMenu
         self.microphone.statusUpdated = { (status) in
             self.menuItemToggle.title = status.toggleTitle
@@ -36,6 +40,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         self.microphone.setupDeviceMenu(deviceMenu)
         self.microphone.status = .muted
+    }
+
+    func menuWillOpen(_ menu: NSMenu) {
+        volumeItem.title = microphone.inputVolume().map { "Input volume: \(Int(($0 * 100).rounded()))%" } ?? "Input volume: n/a"
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {

@@ -100,6 +100,18 @@ final class Microphone {
         setMuted(status.isMuted, on: device)
     }
 
+    // 0...1, nil when the selected device has no input volume control.
+    func inputVolume() -> Float? {
+        guard let device = selectedInput else { return nil }
+        for element in [kAudioObjectPropertyElementMain, AudioObjectPropertyElement(1)] {
+            var address = Self.address(kAudioDevicePropertyVolumeScalar, scope: kAudioDevicePropertyScopeInput, element: element)
+            var volume: Float32 = 0
+            var size = UInt32(MemoryLayout<Float32>.size)
+            if AudioObjectGetPropertyData(device.id, &address, 0, nil, &size, &volume) == noErr { return volume }
+        }
+        return nil
+    }
+
     @objc private func selectDevice(_ item: NSMenuItem) {
         UserDefaults.standard.set((item.representedObject as? InputDevice)?.uid, forKey: Self.pinnedDeviceKey)
         refreshDevices()
