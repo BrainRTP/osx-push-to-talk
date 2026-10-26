@@ -1,5 +1,7 @@
 # 🎙️ PushToTalk
 
+🇬🇧 [English](README.md) | 🇷🇺 Русский
+
 > Приложение для строки меню macOS: микрофон включен, только пока зажата горячая клавиша
 
 ## 📖 Описание
@@ -43,9 +45,10 @@ osx-push-to-talk/
 │   └── xcshareddata/xcschemes/  # общая схема PushToTalk вместе с тестами
 │
 ├── ⚙️ .github/
-│   ├── README.md                # этот файл
 │   └── workflows/Build.yaml     # CI: универсальная сборка и артефакт PushToTalk.app
 │
+├── 🇬🇧 README.md                 # английская версия
+├── 🇷🇺 README_RU.md              # этот файл, русская версия
 ├── 📝 CHANGELOG.md              # история версий
 ├── 👥 AUTHORS                   # авторы и контрибьюторы
 ├── 📄 LICENSE                   # MIT
@@ -153,7 +156,7 @@ rm -rf /Applications/PushToTalk.app && ditto build/Release/PushToTalk.app /Appli
 
 Тесты запускаются внутри приложения (app-hosted). Раннер XCTest убивает тестовый хост до `applicationWillTerminate`, поэтому под тестами `AppDelegate` микрофон не выключает: он проверяет переменную окружения `XCTestConfigurationFilePath`.
 
-CI тесты не запускает: [workflows/Build.yaml](workflows/Build.yaml) собирает приложение, проверяет архитектуры и сохраняет артефакт. Workflow срабатывает на push в `master`, на pull request и вручную, работает на `macos-latest` с новейшим не бета Xcode.
+CI тесты не запускает: [.github/workflows/Build.yaml](.github/workflows/Build.yaml) собирает приложение, проверяет архитектуры и сохраняет артефакт. Workflow срабатывает на push в `master`, на pull request и вручную, работает на `macos-latest` с новейшим не бета Xcode.
 
 ## 🩺 Траблшутинг
 
@@ -206,9 +209,9 @@ log stream --predicate 'subsystem == "com.yulrizka.PushToTalk"'
 - [Этот форк](https://github.com/BrainRTP/osx-push-to-talk)
 - [Workflow Build в GitHub Actions](https://github.com/BrainRTP/osx-push-to-talk/actions/workflows/Build.yaml)
 - [Apple: Using Intel-based apps on a Mac with Apple silicon](https://support.apple.com/en-us/102527): Rosetta работает в macOS 27 и раньше, с macOS 28 только для отдельных старых игр
-- [История версий](../CHANGELOG.md)
-- [Авторы и контрибьюторы](../AUTHORS)
-- [Лицензия MIT](../LICENSE)
+- [История версий](CHANGELOG.md)
+- [Авторы и контрибьюторы](AUTHORS)
+- [Лицензия MIT](LICENSE)
 - Иконка приложения: [jeff](https://thenounproject.com/jeff955/) (CC)
 
 ## 👤 Maintainers
