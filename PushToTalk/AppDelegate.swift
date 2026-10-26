@@ -7,8 +7,6 @@
 //
 
 import Cocoa
-import AudioToolbox
-import AVKit
 
 @main
 
@@ -26,26 +24,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-        
         self.hotkey = HotKey(microphone: microphone, menuItem: hotkeyMenuItem)
-        
-        switch AVCaptureDevice.authorizationStatus(for: .audio) {
-            case .notDetermined: // The user has not yet been asked for camera access.
-                AVCaptureDevice.requestAccess(for: .audio) { granted in
-                    if !granted {
-                        NSLog("Can't get access to the mic.")
-                        exit(1)
-                    }
-                }
-            
-            case .denied: // The user has previously denied access.
-                fallthrough
-            case .restricted: // The user can't grant access due to restrictions.
-                NSLog("Can't get access to the mic.")
-                exit(1)
-            default:
-                print("Already has permission");
-        }
 
         statusItem.menu = statusMenu
         self.microphone.statusUpdated = { (status) in
