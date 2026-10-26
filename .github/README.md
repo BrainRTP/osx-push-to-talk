@@ -1,81 +1,216 @@
-# OSX PushToTalk
+# 🎙️ PushToTalk
 
-OSX PushToTalk mutes and unmutes the microphone via a keypress. It works globally, in every app that uses the microphone (Google Meet, Zoom, Teams, Discord and so on), because it toggles the mute control of the input device itself.
+> Приложение для строки меню macOS: микрофон включен, только пока зажата горячая клавиша
 
-![usage animation](https://user-images.githubusercontent.com/117752/96354725-0eabff00-10da-11eb-9539-6e159e7d588b.gif)
+## 📖 Описание
 
-This fork is a modernized build of [yulrizka/osx-push-to-talk](https://github.com/yulrizka/osx-push-to-talk): native Apple Silicon support, Swift 6, and fixes and features collected from the upstream pull requests and forks.
+PushToTalk выключает микрофон и включает его на время, пока вы держите горячую клавишу. Работает глобально, во всех приложениях, которые записывают звук с управляемого устройства ввода (Google Meet, Zoom, Teams, Discord и другие): приложение переключает mute у самого устройства, а не у отдельной программы.
 
-## Features
+![Анимация работы приложения](https://user-images.githubusercontent.com/117752/96354725-0eabff00-10da-11eb-9539-6e159e7d588b.gif)
 
-- Hold a hotkey (default **Right ⌥**) to unmute, release to mute.
-- Double-tap the hotkey to keep the microphone open; tap once more to mute again.
-- The hotkey is ignored while other modifiers are held, so ⌘⌥ shortcuts do not unmute you.
-- Sticky mute: while muted, the app re-applies mute every 0.2 s, so apps that reset the input device cannot unmute you.
-- Control the system default input device (the default) or pin a specific device in the Devices menu. The choice is remembered across launches, and the list refreshes itself when devices are plugged in or out.
-- The input volume (sensitivity) of the controlled device is shown in the menu.
-- Menu bar icon: slashed mic = muted, green mic = live, gray mic = the app is disabled and the microphone is left open, keyboard = waiting for a new hotkey.
+Это форк [yulrizka/osx-push-to-talk](https://github.com/yulrizka/osx-push-to-talk) с нативной сборкой под Apple Silicon. Сборка универсальная (arm64 + x86_64), Rosetta ей не нужна. Это важно, потому что с macOS 28 Rosetta останется только для отдельных старых игр, и программы только для Intel там не запустятся ([Apple](https://support.apple.com/en-us/102527)). Оригинал не собирается в Xcode 27: Xcode не принимает его deployment target 10.14. Часть функций взята из форков и открытых pull request'ов оригинала, список в разделе "Связанные проекты".
 
-## Requirements
+Что умеет приложение:
 
-macOS 14 or newer. The app is a universal binary (Apple Silicon and Intel).
+- Горячая клавиша (по умолчанию правый ⌥) включает микрофон, пока зажата, и выключает при отпускании.
+- Двойное нажатие оставляет микрофон включенным, следующее нажатие выключает его.
+- Пока зажаты другие модификаторы, клавиша игнорируется, поэтому сочетания вроде ⌘⌥ микрофон не включают.
+- Пока микрофон выключен, mute применяется заново каждые 0,2 секунды (sticky mute): если другая программа сбросит устройство ввода, mute вернется.
+- Приложение управляет устройством ввода по умолчанию или тем, которое вы закрепили в меню. Выбор запоминается, список устройств обновляется при подключении и отключении.
+- В меню видна громкость ввода (чувствительность) управляемого устройства.
+- Иконка в строке меню показывает состояние: выключен, включен, приложение отключено или ждет новую клавишу.
 
-## Installation
-
-### Download a build
-
-1. Open the latest run on the [Actions page](https://github.com/BrainRTP/osx-push-to-talk/actions/workflows/Build.yaml) and download the `PushToTalk.app` artifact.
-2. Unzip it and move `PushToTalk.app` to `/Applications`.
-3. The app is signed ad hoc and not notarized, so macOS refuses to open a downloaded copy. Remove the quarantine flag:
+## 🏗️ Архитектура проекта
 
 ```
+osx-push-to-talk/
+│
+├── 💻 PushToTalk/               # исходники приложения, таргет PushToTalk
+│   ├── AppDelegate.swift        # 🚀 запуск, меню в строке статуса, пункт с громкостью ввода
+│   ├── HotKey.swift             # ⌨️ монитор модификаторов, двойное нажатие, запись новой клавиши
+│   ├── Microphone.swift         # 🎙️ CoreAudio: устройства, mute, таймер 0,2 с, слушатели подключения
+│   ├── MicrophoneStatus.swift   # 🚦 состояния микрофона и иконки SF Symbols
+│   ├── KeyCode.swift            # 🔤 коды клавиш и их подписи для пункта меню
+│   ├── Base.lproj/MainMenu.xib  # 📋 меню в строке статуса
+│   ├── Images.xcassets/         # 🎨 иконка приложения
+│   └── Info.plist               # LSUIElement: у приложения нет значка в Dock
+│
+├── 🧪 PushToTalkTests/          # unit-тесты на XCTest
+│   └── PushToTalkTests.swift    # 3 теста: модификаторы, состояния mute, подпись клавиши
+│
+├── 🛠️ PushToTalk.xcodeproj/     # проект Xcode
+│   ├── project.pbxproj          # macOS 14.0, Swift 6, MainActor по умолчанию в таргете приложения
+│   └── xcshareddata/xcschemes/  # общая схема PushToTalk вместе с тестами
+│
+├── ⚙️ .github/
+│   ├── README.md                # этот файл
+│   └── workflows/Build.yaml     # CI: универсальная сборка и артефакт PushToTalk.app
+│
+├── 📝 CHANGELOG.md              # история версий
+├── 👥 AUTHORS                   # авторы и контрибьюторы
+├── 📄 LICENSE                   # MIT
+└── 🙈 .gitignore                # игнорируются сборка, пользовательские данные Xcode и .idea/
+```
+
+## 🔧 Технологический стек
+
+| Слой        | Технология                                                                                          |
+|-------------|-----------------------------------------------------------------------------------------------------|
+| Язык        | Swift 6 (language mode), MainActor как изоляция по умолчанию в таргете приложения                   |
+| Интерфейс   | AppKit: `NSStatusItem`, `NSMenu`, меню в `MainMenu.xib`, иконки SF Symbols                          |
+| Аудио       | CoreAudio HAL, C API (`AudioObject*`): список устройств, mute, громкость ввода, слушатели изменений |
+| Клавиатура  | `NSEvent`: глобальный и локальный монитор `flagsChanged`, то есть только модификаторы               |
+| Настройки   | `UserDefaults`: горячая клавиша и UID закрепленного устройства                                      |
+| Логи        | `os.Logger`                                                                                         |
+| Платформа   | macOS 14.0 и новее, универсальный бинарник (arm64 + x86_64)                                         |
+| Сборка      | Xcode 26 и новее, `xcodebuild`, подпись ad hoc                                                      |
+| Тесты       | XCTest                                                                                              |
+| CI          | GitHub Actions, `macos-latest`                                                                      |
+| Зависимости | Сторонних нет                                                                                       |
+
+## 🚀 Быстрый старт
+
+### Требования
+
+1. macOS 14 или новее, чтобы запускать приложение.
+2. Xcode 26 или новее, чтобы собирать его из исходников.
+3. Сторонних зависимостей нет.
+
+### Готовая сборка
+
+1. Откройте последний запуск workflow [Build](https://github.com/BrainRTP/osx-push-to-talk/actions/workflows/Build.yaml) и скачайте артефакт `PushToTalk.app`.
+2. Распакуйте архив и перенесите `PushToTalk.app` в `/Applications`.
+3. Приложение подписано ad hoc и не нотаризовано, поэтому macOS не откроет скачанную копию. Снимите флаг карантина командой ниже или разрешите запуск в System Settings > Privacy & Security > Open Anyway.
+
+```bash
+# Снять флаг карантина со скачанной копии
 xattr -dr com.apple.quarantine /Applications/PushToTalk.app
 ```
 
-   or allow it under System Settings > Privacy & Security > "Open Anyway".
+### Сборка из исходников
 
-### Build from source
-
-Requires Xcode 26 or newer.
-
-```
+```bash
 git clone https://github.com/BrainRTP/osx-push-to-talk.git
 cd osx-push-to-talk
+
+# Release-сборка, результат: build/Release/PushToTalk.app
 xcodebuild -project PushToTalk.xcodeproj -target PushToTalk -configuration Release
+
+# Установка (ditto, а не cp -R: cp положит новый бандл внутрь уже установленного)
+rm -rf /Applications/PushToTalk.app && ditto build/Release/PushToTalk.app /Applications/PushToTalk.app
 ```
 
-The app ends up in `build/Release/PushToTalk.app`; move it to `/Applications`. A locally built app needs no quarantine handling.
+У собранной локально копии флага карантина нет, снимать его не нужно.
 
-### Homebrew (upstream version)
+### Homebrew
 
-The upstream tap (`brew install yulrizka/tap/pushtotalk`) builds the original 0.1.5 release from source. It has none of the changes in this fork and no longer builds with Xcode 27, whose minimum deployment target is macOS 12.
+У форка своего tap нет. Tap оригинала (`brew install yulrizka/tap/pushtotalk`) собирает исходную версию 0.1.5: изменений форка в ней нет, а в Xcode 27 она не собирается, потому что его минимальный deployment target macOS 12.
 
-## Usage notes
+### Запуск и удаление
 
-- Change HotKey: choose "Change HotKey" in the menu and press a modifier key (⌥, ⌘, ⌃, ⇧ or fn, left or right). Only modifier keys can be the hotkey, because the app listens for modifier changes only.
-- Enable/Disable: "Disable" stops the app from managing the microphone and leaves it unmuted (gray icon); "Enable" mutes it again.
-- Devices: "System Default" follows whatever macOS uses as the input device; picking a device pins it. Devices without a mute control (for example the iPhone Continuity microphone) are listed but cannot be selected.
-- Quitting the app unmutes the microphone. If the app gets killed, the device stays muted: launch the app and quit it again.
+Запустите `PushToTalk.app`: в строке меню появится иконка. Чтобы удалить приложение, выйдите из него (это снимет mute) и удалите `PushToTalk.app` из `/Applications`. Настройки лежат в `~/Library/Preferences/com.yulrizka.PushToTalk.plist`.
 
-## Troubleshooting
+## 🎛️ Использование
 
-### The hotkey does nothing
+После запуска в строке меню появляется иконка, значка в Dock у приложения нет. Микрофон сразу выключен. Доступ к микрофону приложение не запрашивает: mute меняется через свойство устройства в CoreAudio.
 
-Monitoring modifier keys normally needs no permission. If the app does not react, add PushToTalk under System Settings > Privacy & Security > Input Monitoring (or Accessibility) and relaunch it.
+### Горячая клавиша
 
-### "PushToTalk is damaged and can't be opened" or "unidentified developer"
+- Новую клавишу задает пункт меню `Change HotKey`: выберите его и нажмите нужный модификатор. Пока приложение ждет клавишу, микрофон остается выключенным.
+- Подойдут ⌥, ⌘, ⌃, ⇧ и fn, левые и правые. Приложение следит только за изменением модификаторов, поэтому обычные клавиши и Caps Lock не подходят.
+- Двойным считается нажатие, повторенное быстрее чем через 0,2 секунды после первого. Микрофон остается включенным до следующего нажатия.
 
-The app is signed ad hoc, not notarized. Remove the quarantine flag as described under Download, or build it from source.
+### Иконка в строке меню
 
-### Nobody hears me although the icon is green
+| Иконка                    | Состояние                                                                                                                                          |
+|---------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------|
+| 🔇 Перечеркнутый микрофон | Микрофон выключен                                                                                                                                  |
+| 🟢 Зеленый микрофон       | Микрофон включен: клавиша зажата или включен двойным нажатием                                                                                      |
+| ⚪ Серый микрофон         | Приложение отключено, микрофон открыт. Так же выглядит иконка, если у устройства ввода нет mute (подсказка "The input device has no mute control") |
+| ⌨️ Клавиатура             | Приложение ждет новую горячую клавишу, микрофон выключен                                                                                           |
 
-Check the input volume shown in the menu; some apps lower it. Raise it under System Settings > Sound > Input.
+### Меню
 
-### Uninstall
+| Пункт                     | Что делает                                                                                                                                                                 |
+|---------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `Input volume: N%`        | Громкость ввода (чувствительность) управляемого устройства, обновляется при открытии меню. `n/a`, если регулятора нет                                                      |
+| `Disable` / `Enable`      | `Disable` перестает управлять микрофоном и оставляет его включенным (серая иконка), `Enable` снова выключает его                                                           |
+| `Devices`                 | `System Default` следует за устройством ввода macOS, выбор устройства закрепляет его. Устройства без mute недоступны для выбора, например микрофон iPhone через Continuity |
+| `Refresh Devices`         | Обновляет список вручную. Обычно не нужен: список обновляется при подключении и отключении устройств и при смене устройства по умолчанию                                   |
+| `Change HotKey (Right-⌥)` | Записывает новую клавишу, в скобках текущая                                                                                                                                |
+| `Quit PushToTalk`         | Выход, mute снимается                                                                                                                                                      |
 
-Quit the app (this unmutes the microphone) and delete `PushToTalk.app` from `/Applications`. Preferences live in `~/Library/Preferences/com.yulrizka.PushToTalk.plist`.
+### Выход и настройки
 
-## Acknowledgement
+Выход из приложения снимает mute, и микрофон остается включенным. То же происходит при выходе из системы и выключении Mac. Если процесс убит (например, через Force Quit), устройство остается выключенным: запустите приложение и выйдите из него еще раз. Горячая клавиша и закрепленное устройство хранятся в `~/Library/Preferences/com.yulrizka.PushToTalk.plist`.
 
-- Original app by [Ahmy Yulrizka](https://github.com/yulrizka) and contributors (see AUTHORS).
-- App icon by [jeff](https://thenounproject.com/jeff955/) (CC).
+## 🧪 Тестирование
+
+| Тип                       | Команда                                                                                          | Что проверяет                                                                                 |
+|---------------------------|--------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------|
+| 🔬 Unit (XCTest, 3 теста) | `xcodebuild test -project PushToTalk.xcodeproj -scheme PushToTalk -destination 'platform=macOS'` | Совпадение модификаторов горячей клавиши, состояния mute, подпись клавиши по умолчанию        |
+| 🏗️ CI (GitHub Actions)    | Workflow [Build](https://github.com/BrainRTP/osx-push-to-talk/actions/workflows/Build.yaml)      | Release-сборка, наличие arm64 и x86_64 в бинарнике (`lipo -archs`), артефакт `PushToTalk.app` |
+
+Тесты запускаются внутри приложения (app-hosted). Раннер XCTest убивает тестовый хост до `applicationWillTerminate`, поэтому под тестами `AppDelegate` микрофон не выключает: он проверяет переменную окружения `XCTestConfigurationFilePath`.
+
+CI тесты не запускает: [workflows/Build.yaml](workflows/Build.yaml) собирает приложение, проверяет архитектуры и сохраняет артефакт. Workflow срабатывает на push в `master`, на pull request и вручную, работает на `macos-latest` с новейшим не бета Xcode.
+
+## 🩺 Траблшутинг
+
+### Горячая клавиша ничего не делает
+
+Слежение за модификаторами обычно не требует разрешений. Если приложение не реагирует, добавьте PushToTalk в System Settings > Privacy & Security > Input Monitoring (или Accessibility) и перезапустите его. Если иконка серая, а в меню стоит пункт `Enable`, приложение отключено: включите его.
+
+### "PushToTalk is damaged and can't be opened" или "unidentified developer"
+
+Приложение подписано ad hoc и не нотаризовано. Снимите флаг карантина, как описано в разделе "Готовая сборка", или соберите приложение из исходников.
+
+### Меня не слышно, хотя иконка зеленая
+
+Посмотрите громкость ввода в первом пункте меню: некоторые приложения ее снижают. Поднимите ее в System Settings > Sound > Input.
+
+### Иконка серая, в подсказке "The input device has no mute control"
+
+У устройства ввода, которым пользуется macOS, нет управления mute, например у микрофона iPhone через Continuity. Другое устройство приложение само не выберет: заглушить микрофон, которым macOS не пользуется, значило бы оставить рабочий включенным. Переключите вход в System Settings > Sound > Input на устройство с mute. Такие же иконка и подсказка бывают, когда устройств ввода нет совсем.
+
+### Микрофон остался выключенным после того, как приложение убили
+
+Выход из приложения снимает mute, а убитый процесс (например, через Force Quit) этого сделать не может. Запустите приложение и выйдите из него еще раз.
+
+### Mute не применяется
+
+Ошибки записи в CoreAudio (с кодом OSStatus) попадают в лог с подсистемой `com.yulrizka.PushToTalk`:
+
+```bash
+log stream --predicate 'subsystem == "com.yulrizka.PushToTalk"'
+```
+
+## 🔗 Связанные проекты
+
+> Актуально на 26.10.2026. Из перечисленных форков взяты идеи функций.
+
+| Проект                                                                               | Как связан                                                                                                                                                              |
+|--------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [yulrizka/osx-push-to-talk](https://github.com/yulrizka/osx-push-to-talk)            | Оригинал, форк начат с его версии 0.1.5. Автор Ahmy Yulrizka                                                                                                            |
+| [yulrizka/osx-push-to-talk#44](https://github.com/yulrizka/osx-push-to-talk/pull/44) | Pull request с мониторингом состояния микрофона, в оригинал не влит. Идея обновлять устройства при подключении реализована заново, без вендорной библиотеки из этого PR |
+| [12joan/push-to-talk](https://github.com/12joan/push-to-talk)                        | Идея повторно применять mute каждые 0,2 секунды                                                                                                                         |
+| [gerotakke/osx-push-to-talk](https://github.com/gerotakke/osx-push-to-talk)          | Идея запоминать выбранное устройство ввода                                                                                                                              |
+| [arx8x/osx-push-to-talk](https://github.com/arx8x/osx-push-to-talk)                  | Идея запоминать выбранное устройство ввода                                                                                                                              |
+| [RoryQ/osx-push-to-talk](https://github.com/RoryQ/osx-push-to-talk)                  | Идея игнорировать горячую клавишу, когда зажаты другие модификаторы                                                                                                     |
+| [darruda/osx-push-to-talk](https://github.com/darruda/osx-push-to-talk)              | Идея цветных иконок состояния                                                                                                                                           |
+| [nielubowicz/osx-push-to-talk](https://github.com/nielubowicz/osx-push-to-talk)      | Идея цветных иконок состояния                                                                                                                                           |
+
+## 🔗 Ссылки
+
+- [Оригинальный репозиторий](https://github.com/yulrizka/osx-push-to-talk)
+- [Этот форк](https://github.com/BrainRTP/osx-push-to-talk)
+- [Workflow Build в GitHub Actions](https://github.com/BrainRTP/osx-push-to-talk/actions/workflows/Build.yaml)
+- [Apple: Using Intel-based apps on a Mac with Apple silicon](https://support.apple.com/en-us/102527): Rosetta работает в macOS 27 и раньше, с macOS 28 только для отдельных старых игр
+- [История версий](../CHANGELOG.md)
+- [Авторы и контрибьюторы](../AUTHORS)
+- [Лицензия MIT](../LICENSE)
+- Иконка приложения: [jeff](https://thenounproject.com/jeff955/) (CC)
+
+## 👤 Maintainers
+
+[@BrainRTP](https://github.com/BrainRTP) (Stanislav Panchenko), оригинальный автор: Ahmy Yulrizka ([@yulrizka](https://github.com/yulrizka))
