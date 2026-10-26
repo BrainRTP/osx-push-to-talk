@@ -23,57 +23,14 @@ What the app does:
 - The menu bar icon shows the state: microphone off, microphone on, app disabled, or waiting for a new key.
 - A sound marks every change: Pop when the microphone goes live, Tink when it is muted. After a short tap the mute sound waits for the double-tap window, so a double press gives one sound. Each sound has its own level in the menu (0% turns it off).
 
-## 🏗️ Project architecture
-
-```
-osx-push-to-talk/
-│
-├── 💻 PushToTalk/               # app sources, the PushToTalk target
-│   ├── AppDelegate.swift        # 🚀 launch, status bar menu, volume slider and lock, sounds and their levels
-│   ├── HotKey.swift             # ⌨️ modifier monitor, double press, recording a new key
-│   ├── Microphone.swift         # 🎙️ CoreAudio: devices, mute, input volume, 0.2 s timer, connection listeners
-│   ├── MicrophoneStatus.swift   # 🚦 microphone states and SF Symbols icons
-│   ├── KeyCode.swift            # 🔤 key codes and their labels for the menu item
-│   ├── Base.lproj/MainMenu.xib  # 📋 status bar menu
-│   ├── Images.xcassets/         # 🎨 app icon
-│   └── Info.plist               # LSUIElement: the app has no Dock icon
-│
-├── 🧪 PushToTalkTests/          # XCTest unit tests
-│   └── PushToTalkTests.swift    # 3 tests: modifiers, mute states, key label
-│
-├── 🛠️ PushToTalk.xcodeproj/     # Xcode project
-│   ├── project.pbxproj          # macOS 14.0, Swift 6, MainActor by default in the app target
-│   └── xcshareddata/xcschemes/  # shared PushToTalk scheme together with the tests
-│
-├── 🛠️ tools/
-│   └── taptimer.swift           # ⏱️ measures hotkey hold and double-tap timings
-│
-├── ⚙️ .github/
-│   └── workflows/Build.yaml     # CI: universal build and the PushToTalk.app artifact
-│
-├── 🇬🇧 README.md                 # English version (this file)
-├── 🇷🇺 README_RU.md              # Russian version
-├── 📝 CHANGELOG.md              # version history
-├── 👥 AUTHORS                   # authors and contributors
-├── 📄 LICENSE                   # MIT
-└── 🙈 .gitignore                # ignores build output, Xcode user data and .idea/
-```
-
 ## 🔧 Tech stack
 
-| Layer        | Technology                                                                                                |
-|--------------|-----------------------------------------------------------------------------------------------------------|
-| Language     | Swift 6 (language mode), MainActor as the default isolation in the app target                             |
-| UI           | AppKit: `NSStatusItem`, `NSMenu`, the menu in `MainMenu.xib`, `NSSlider` in a menu item, SF Symbols icons |
-| Audio        | CoreAudio HAL, C API (`AudioObject*`): device list, mute, input volume, change listeners                  |
-| Keyboard     | `NSEvent`: a global and a local `flagsChanged` monitor, that is, modifiers only                           |
-| Settings     | `UserDefaults`: the hotkey, the UID of the pinned device, the locked input volume, the sound levels       |
-| Logs         | `os.Logger`                                                                                               |
-| Platform     | macOS 14.0 or newer, universal binary (arm64 + x86_64)                                                    |
-| Build        | Xcode 26 or newer, `xcodebuild`, ad hoc signing                                                           |
-| Tests        | XCTest                                                                                                    |
-| CI           | GitHub Actions, `macos-latest`                                                                            |
-| Dependencies | Third-party: none                                                                                         |
+| Layer    | Technology                                   |
+|----------|----------------------------------------------|
+| Language | Swift 6                                      |
+| UI       | AppKit, menu bar app                         |
+| Audio    | CoreAudio: device mute and input volume      |
+| Build    | Xcode 26+, universal binary (arm64 + x86_64) |
 
 ## 🚀 Quick start
 
@@ -119,61 +76,52 @@ Launch `PushToTalk.app`: an icon appears in the menu bar. To uninstall the app, 
 
 ## 🎛️ Usage
 
-After launch, an icon appears in the menu bar and the app has no Dock icon. The microphone is muted right away. The app does not request microphone access: mute is changed through a device property in CoreAudio. Every mute and unmute is confirmed by a sound: Pop when the microphone goes live, Tink when it is muted. Pop plays at once. Tink plays at once when the microphone is muted after a hold longer than the double-tap window; after a short tap Tink waits for the window, and a second press within the window cancels it, so a double press gives one sound.
+After launch the icon appears in the menu bar and the microphone is muted. The app does not ask for microphone access: it changes the mute property of the device through CoreAudio.
 
 ### Hotkey
 
-- A new key is set with the `Change HotKey` menu item: choose it and press the modifier you want. While the app waits for a key, the microphone stays off.
-- Any of ⌥, ⌘, ⌃, ⇧ and fn works, left or right. The app watches only for modifier changes, so regular keys and Caps Lock do not work.
-- A double press keeps the microphone on until the next double press turns it off. Single presses work as push-to-talk and never release this lock: while the lock is on, pressing and releasing the key changes nothing.
-- A second press within the double-tap window counts as a double press. The window is 0.3 seconds by default; the value of `prefDoubleTapInterval` in seconds overrides it, for example `defaults write com.yulrizka.PushToTalk prefDoubleTapInterval -float 0.35`.
+- To set a new key, choose `Change HotKey` in the menu and press a modifier: ⌥, ⌘, ⌃, ⇧ or fn, left or right. Regular keys and Caps Lock do not work.
+- The double-tap window is 0.3 seconds. To change it, run `defaults write com.yulrizka.PushToTalk prefDoubleTapInterval -float 0.35`, no restart needed.
 
 ### Menu bar icon
 
-| Icon                      | State                                                                                                                                                 |
-|---------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 🔇 Crossed-out microphone | The microphone is off                                                                                                                                 |
-| 🟢 Green microphone       | The microphone is on: the key is held down or the lock is on (double press)                                                                           |
-| ⚪ Gray microphone        | The app is disabled, the microphone is open. The icon looks the same if the input device has no mute (tooltip "The input device has no mute control") |
-| ⌨️ Keyboard               | The app is waiting for a new hotkey, the microphone is off                                                                                            |
+| Icon                      | State                                                                         |
+|---------------------------|-------------------------------------------------------------------------------|
+| 🔇 Crossed-out microphone | The microphone is off                                                         |
+| 🟢 Green microphone       | The microphone is on: the key is held down or locked by a double press        |
+| ⚪ Gray microphone        | The app is disabled and the microphone is on, or the input device has no mute |
+| ⌨️ Keyboard               | The app is waiting for a new hotkey                                           |
 
 ### Menu
 
-| Item                                    | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-|-----------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `Input volume: N%` + slider             | Shows and sets the input volume (sensitivity) of the controlled device, refreshed when the menu opens. The slider is disabled and the label says `n/a` when the device has no volume control                                                                                                                                                                                                                                                                                                                        |
-| `Lock input volume`                     | Remembers the current input volume and restores it within 0.2 seconds whenever another app changes it (conferencing apps with automatic level adjustment do this). The check mark shows the lock is on; moving the slider moves the locked value. The lock belongs to the controlled device: it turns off when that device changes (you pick another one in `Devices`, or another device becomes the system default while `System Default` is selected). The item is disabled when the device has no volume control |
-| `Sound when live (Pop): N%` (submenu)   | Level of the sound that plays when the microphone goes live: 0% (off), 25%, 50%, 75% or 100%. The current level has a check mark. Choosing a level plays the sound once                                                                                                                                                                                                                                                                                                                                             |
-| `Sound when muted (Tink): N%` (submenu) | Level of the sound that plays when the microphone is muted: 0% (off), 25%, 50%, 75% or 100%. The current level has a check mark. Choosing a level plays the sound once                                                                                                                                                                                                                                                                                                                                              |
-| `Disable` / `Enable`                    | `Disable` stops controlling the microphone and leaves it on (gray icon), `Enable` turns it off again                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `Devices`                               | `System Default` follows the macOS input device. Choosing a device pins it. Devices without mute cannot be selected, for example the iPhone microphone via Continuity                                                                                                                                                                                                                                                                                                                                               |
-| `Refresh Devices`                       | Refreshes the list manually. Usually not needed: the list updates when devices are connected or disconnected and when the default device changes                                                                                                                                                                                                                                                                                                                                                                    |
-| `Change HotKey (Right-⌥)`               | Records a new key, the current one is in parentheses                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `Quit PushToTalk`                       | Quits the app and lifts the mute                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Item                                               | What it does                                                                        |
+|----------------------------------------------------|-------------------------------------------------------------------------------------|
+| `Input volume: N%` + slider                        | Input volume (sensitivity) of the device, `n/a` if the device has no volume control |
+| `Lock input volume`                                | Restores the volume when another app changes it. Turns off when the device changes  |
+| `Sound when live (Pop)`, `Sound when muted (Tink)` | Sound levels for mute and unmute, 0% turns the sound off                            |
+| `Disable` / `Enable`                               | Stops controlling the microphone and leaves it on / mutes it again                  |
+| `Devices`                                          | `System Default` or a pinned device. Devices without mute cannot be selected        |
+| `Refresh Devices`                                  | Refreshes the list by hand, normally it updates on its own                          |
+| `Change HotKey (Right-⌥)`                          | Records a new key, the current one is in parentheses                                |
+| `Quit PushToTalk`                                  | Quits the app and lifts the mute                                                    |
 
 ### Quitting and settings
 
-Quitting the app lifts the mute, and the microphone stays on. The same happens when you log out or shut down the Mac. If the process is killed (for example, with Force Quit), the device stays muted: launch the app and quit it again. The hotkey, the pinned device, the locked input volume, the two sound levels and the double-tap window (`prefDoubleTapInterval`, optional, set with `defaults write`) are stored in `~/Library/Preferences/com.yulrizka.PushToTalk.plist`.
+Quitting the app, logging out or shutting down the Mac lifts the mute. Settings are stored in `~/Library/Preferences/com.yulrizka.PushToTalk.plist`.
 
 ## 🧪 Testing
 
-| Type                      | Command                                                                                          | What it checks                                                                                       |
-|---------------------------|--------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
-| 🔬 Unit (XCTest, 3 tests) | `xcodebuild test -project PushToTalk.xcodeproj -scheme PushToTalk -destination 'platform=macOS'` | Hotkey modifier matching, mute states, the default key label                                         |
-| 🏗️ CI (GitHub Actions)    | [Build](https://github.com/BrainRTP/osx-push-to-talk/actions/workflows/Build.yaml) workflow      | Release build, arm64 and x86_64 present in the binary (`lipo -archs`), the `PushToTalk.app` artifact |
+```bash
+# Unit tests (XCTest)
+xcodebuild test -project PushToTalk.xcodeproj -scheme PushToTalk -destination 'platform=macOS'
+```
 
-Tests run inside the app (app-hosted). The XCTest runner kills the test host before `applicationWillTerminate`, so under tests `AppDelegate` does not mute the microphone: it checks the `XCTestConfigurationFilePath` environment variable.
+CI ([Build](https://github.com/BrainRTP/osx-push-to-talk/actions/workflows/Build.yaml)) builds the universal app, checks both architectures and saves `PushToTalk.app` as an artifact. It does not run the tests.
 
-CI does not run the tests: [.github/workflows/Build.yaml](.github/workflows/Build.yaml) builds the app, checks the architectures and saves the artifact. The workflow runs on a push to `master`, on a pull request and manually, on `macos-latest` with the newest non-beta Xcode.
-
-Tuning the double tap: `tools/taptimer.swift` measures how long you hold the hotkey and how fast you press it twice, with the same `NSEvent` monitors as the app, and suggests a double-tap window. Build and run it from the repository root, press the key the way you normally use it, then press Ctrl-C to print the summary. The optional argument is the key code to watch: by default the hotkey saved by the app, otherwise fn (63). If you never changed the hotkey in the app, pass 61 (right ⌥). The app reads `prefDoubleTapInterval` on every press, so a new value works without a restart.
+`tools/taptimer.swift` helps pick the double-tap window: it measures how you press the hotkey and suggests a value. Press the key as usual, then Ctrl-C to see the result.
 
 ```bash
-# Build and run the timing tool; build/ is created if missing
 mkdir -p build && swiftc -O -o build/taptimer tools/taptimer.swift && build/taptimer
-
-# Set the double-tap window to 0.35 seconds
-defaults write com.yulrizka.PushToTalk prefDoubleTapInterval -float 0.35
 ```
 
 ## 🩺 Troubleshooting
