@@ -29,10 +29,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.menu = statusMenu
         self.microphone.statusUpdated = { (status) in
             self.menuItemToggle.title = status.toggleTitle
-            self.statusItem.button?.image = status.image
+            let uncontrolled = self.microphone.selectedInput == nil
+            // Never claim "muted" when no input device can be muted.
+            self.statusItem.button?.image = (uncontrolled && status == .muted ? MicrophoneStatus.disabled : status).image
+            self.statusItem.button?.toolTip = uncontrolled ? "The input device has no mute control" : nil
         }
+        self.microphone.setupDeviceMenu(deviceMenu)
         self.microphone.status = .muted
-        self.refreshDevices(nil);
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {
@@ -50,12 +53,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     @IBAction func refreshDevices(_ sender: NSMenuItem?) {
-        do {
-            try self.microphone.setupDeviceMenu(menu: deviceMenu)
-        } catch {
-            print("Unexpected Error: \(error).")
-            exit(1)
-        }
+        self.microphone.refreshDevices()
     }
     
     @IBAction func recordNewHotKey(_ sender: NSMenuItem) {
