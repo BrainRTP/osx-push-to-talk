@@ -24,6 +24,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
+        // The XCTest runner kills the test host before applicationWillTerminate, so never mute under tests.
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else {
+            microphone.status = .disabled // no device is selected yet, so this only stops later refreshes from muting
+            return
+        }
         self.hotkey = HotKey(microphone: microphone, menuItem: hotkeyMenuItem)
 
         statusMenu.delegate = self
