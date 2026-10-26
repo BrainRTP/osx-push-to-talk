@@ -19,16 +19,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
     
     var microphone = Microphone()
     var hotkey: HotKey?
-    private let volumeLabel = NSTextField(labelWithString: "Input volume: -")
-    private let volumeSlider = NSSlider(value: 0, minValue: 0, maxValue: 100, target: nil, action: nil)
-    private let volumeItem = NSMenuItem()
+    private let volumeItem = NSMenuItem(title: "Input volume", action: nil, keyEquivalent: "")
     private let lockVolumeItem = NSMenuItem(title: "Lock input volume", action: #selector(toggleVolumeLock(_:)), keyEquivalent: "")
-    private let soundOnLabel = NSTextField(labelWithString: "Sound when live (Pop): -")
-    private let soundOnSlider = NSSlider(value: 100, minValue: 0, maxValue: 100, target: nil, action: nil)
-    private let soundOnItem = NSMenuItem()
-    private let soundOffLabel = NSTextField(labelWithString: "Sound when muted (Tink): -")
-    private let soundOffSlider = NSSlider(value: 100, minValue: 0, maxValue: 100, target: nil, action: nil)
-    private let soundOffItem = NSMenuItem()
+    private let soundOnItem = NSMenuItem(title: "Sound when live (Pop)", action: nil, keyEquivalent: "")
+    private let soundOffItem = NSMenuItem(title: "Sound when muted (Tink)", action: nil, keyEquivalent: "")
     private static let soundOnKey = "prefSoundOnVolume"
     private static let soundOffKey = "prefSoundOffVolume"
     private var announcedMuted = true
@@ -47,8 +41,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
         self.hotkey = HotKey(microphone: microphone, menuItem: hotkeyMenuItem)
 
         statusMenu.delegate = self
-        setUpSliderItems()
-        for (index, item) in [volumeItem, lockVolumeItem, .separator(), soundOnItem, soundOffItem, .separator()].enumerated() {
+        setUpLevelMenus()
+        for (index, item) in [volumeItem, .separator(), soundOnItem, soundOffItem, .separator()].enumerated() {
             statusMenu.insertItem(item, at: index)
         }
         statusItem.menu = statusMenu
@@ -100,58 +94,70 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
     }
 
     func menuWillOpen(_ menu: NSMenu) {
-        if let volume = microphone.inputVolume() {
-            volumeSlider.isEnabled = true
-            volumeSlider.doubleValue = Double(volume * 100)
-            volumeLabel.stringValue = "Input volume: \(Int((volume * 100).rounded()))%"
-        } else {
-            volumeSlider.isEnabled = false
-            volumeLabel.stringValue = "Input volume: n/a"
+        let volume = microphone.inputVolume()
+        let onLevel = Self.soundVolume(forKey: Self.soundOnKey)
+        let offLevel = Self.soundVolume(forKey: Self.soundOffKey)
+        if menu == statusMenu {
+            volumeItem.title = volume.map { "Input volume: \(Self.percent($0))%" } ?? "Input volume: n/a"
+            soundOnItem.title = "Sound when live (Pop): \(Self.percent(onLevel))%"
+            soundOffItem.title = "Sound when muted (Tink): \(Self.percent(offLevel))%"
+        } else if menu == volumeItem.submenu {
+            check(menu, percent: volume.map { Self.nearest($0, step: 10) })
+            lockVolumeItem.state = microphone.lockedInputVolume == nil ? .off : .on
+        } else if menu == soundOnItem.submenu {
+            check(menu, percent: Self.nearest(onLevel, step: 25))
+        } else if menu == soundOffItem.submenu {
+            check(menu, percent: Self.nearest(offLevel, step: 25))
         }
-        lockVolumeItem.state = microphone.lockedInputVolume == nil ? .off : .on
-        soundOnSlider.doubleValue = Double(Self.soundVolume(forKey: Self.soundOnKey) * 100)
-        soundOffSlider.doubleValue = Double(Self.soundVolume(forKey: Self.soundOffKey) * 100)
-        soundOnLabel.stringValue = "Sound when live (Pop): \(Int(soundOnSlider.doubleValue.rounded()))%"
-        soundOffLabel.stringValue = "Sound when muted (Tink): \(Int(soundOffSlider.doubleValue.rounded()))%"
     }
 
-    private func setUpSliderItems() {
-        fill(volumeItem, label: volumeLabel, slider: volumeSlider, action: #selector(volumeSliderMoved(_:)))
-        fill(soundOnItem, label: soundOnLabel, slider: soundOnSlider, action: #selector(soundSliderMoved(_:)))
-        fill(soundOffItem, label: soundOffLabel, slider: soundOffSlider, action: #selector(soundSliderMoved(_:)))
+    // Submenus with preset levels: plain menu items instead of sliders, which are hard to drag inside a menu.
+    private func setUpLevelMenus() {
+        volumeItem.submenu = levelMenu(step: 10, action: #selector(volumeLevelChosen(_:)))
+        volumeItem.submenu?.addItem(.separator())
         lockVolumeItem.target = self
+        lockVolumeItem.tag = -1
+        volumeItem.submenu?.addItem(lockVolumeItem)
+        soundOnItem.submenu = levelMenu(step: 25, action: #selector(soundLevelChosen(_:)))
+        soundOffItem.submenu = levelMenu(step: 25, action: #selector(soundLevelChosen(_:)))
     }
 
-    private func fill(_ item: NSMenuItem, label: NSTextField, slider: NSSlider, action: Selector) {
-        let view = NSView(frame: NSRect(x: 0, y: 0, width: 220, height: 46))
-        label.frame = NSRect(x: 14, y: 26, width: 192, height: 17)
-        label.font = NSFont.menuFont(ofSize: 0)
-        slider.frame = NSRect(x: 14, y: 4, width: 192, height: 20)
-        slider.isContinuous = true
-        slider.target = self
-        slider.action = action
-        view.addSubview(label)
-        view.addSubview(slider)
-        item.view = view
+    private func levelMenu(step: Int, action: Selector) -> NSMenu {
+        let menu = NSMenu()
+        menu.delegate = self
+        for percent in stride(from: 0, through: 100, by: step) {
+            let item = NSMenuItem(title: "\(percent)%", action: action, keyEquivalent: "")
+            item.target = self
+            item.tag = percent
+            menu.addItem(item)
+        }
+        return menu
     }
+
+    private func check(_ menu: NSMenu, percent: Int?) {
+        for item in menu.items where item.tag >= 0 && item.action != nil {
+            item.state = item.tag == percent ? .on : .off
+        }
+    }
+
+    private static func percent(_ level: Float) -> Int { Int((level * 100).rounded()) }
+
+    private static func nearest(_ level: Float, step: Int) -> Int { Int((level * 100 / Float(step)).rounded()) * step }
 
     private static func soundVolume(forKey key: String) -> Float {
         UserDefaults.standard.object(forKey: key) as? Float ?? 1
     }
 
-    @objc private func soundSliderMoved(_ slider: NSSlider) {
-        let isOn = slider == soundOnSlider
-        UserDefaults.standard.set(Float(slider.doubleValue / 100), forKey: isOn ? Self.soundOnKey : Self.soundOffKey)
-        let percent = Int(slider.doubleValue.rounded())
-        (isOn ? soundOnLabel : soundOffLabel).stringValue = isOn ? "Sound when live (Pop): \(percent)%" : "Sound when muted (Tink): \(percent)%"
-        if NSApp.currentEvent?.type == .leftMouseUp { play(isOn ? "Pop" : "Tink") } // preview at the new level
-    }
-
-    @objc private func volumeSliderMoved(_ slider: NSSlider) {
-        let volume = Float(slider.doubleValue / 100)
+    @objc private func volumeLevelChosen(_ item: NSMenuItem) {
+        let volume = Float(item.tag) / 100
         microphone.setInputVolume(volume)
         if microphone.lockedInputVolume != nil { microphone.lockedInputVolume = volume }
-        volumeLabel.stringValue = "Input volume: \(Int(slider.doubleValue.rounded()))%"
+    }
+
+    @objc private func soundLevelChosen(_ item: NSMenuItem) {
+        let isOn = item.menu == soundOnItem.submenu
+        UserDefaults.standard.set(Float(item.tag) / 100, forKey: isOn ? Self.soundOnKey : Self.soundOffKey)
+        play(isOn ? "Pop" : "Tink") // preview at the new level
     }
 
     @objc private func toggleVolumeLock(_ sender: NSMenuItem) {
@@ -159,7 +165,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
     }
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-        menuItem != lockVolumeItem || microphone.inputVolume() != nil
+        menuItem.menu != volumeItem.submenu || microphone.inputVolume() != nil
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {
