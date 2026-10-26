@@ -24,6 +24,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
     private let volumeItem = NSMenuItem()
     private let lockVolumeItem = NSMenuItem(title: "Lock input volume", action: #selector(toggleVolumeLock(_:)), keyEquivalent: "")
     private var announcedMuted = true
+    private var lastLiveTime: TimeInterval = 0
     private var pendingSound: DispatchWorkItem?
     private var quitting = false
     
@@ -49,25 +50,43 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemVa
             // Never claim "muted" when no input device can be muted.
             self.statusItem.button?.image = (uncontrolled && status == .muted ? MicrophoneStatus.disabled : status).image
             self.statusItem.button?.toolTip = uncontrolled ? "The input device has no mute control" : nil
-            if !self.quitting { self.announceLater(muted: status.isMuted) }
+            if !self.quitting { self.announce(muted: status.isMuted) }
         }
         self.microphone.setupDeviceMenu(deviceMenu)
         self.microphone.status = .muted
     }
 
-    // One sound per settled state: a double tap changes the state several times within the double-tap window and sounds once.
-    private func announceLater(muted: Bool) {
-        pendingSound?.cancel()
-        let work = DispatchWorkItem { [weak self] in
-            MainActor.assumeIsolated {
-                guard let self, muted != self.announcedMuted else { return }
-                self.announcedMuted = muted
-                // A copy plays even while the previous sound is still playing.
-                (NSSound(named: muted ? "Tink" : "Pop")?.copy() as? NSSound)?.play()
+    // Pop at once when the mic goes live. Tink at once after a hold, but after a short tap it waits for the
+    // double-tap window, so a second press (double tap, lock on) cancels it and the double tap sounds once.
+    private func announce(muted: Bool) {
+        let now = ProcessInfo.processInfo.systemUptime
+        if !muted {
+            pendingSound?.cancel()
+            pendingSound = nil
+            guard announcedMuted else { return }
+            announcedMuted = false
+            lastLiveTime = now
+            play("Pop")
+        } else if announcedMuted || pendingSound != nil {
+            return
+        } else if now - lastLiveTime < HotKey.doubleTapInterval {
+            let work = DispatchWorkItem { [weak self] in
+                MainActor.assumeIsolated {
+                    self?.pendingSound = nil
+                    self?.announce(muted: true)
+                }
             }
+            pendingSound = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + HotKey.doubleTapInterval - (now - lastLiveTime), execute: work)
+        } else {
+            announcedMuted = true
+            play("Tink")
         }
-        pendingSound = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + HotKey.doubleTapInterval, execute: work)
+    }
+
+    private func play(_ name: String) {
+        // A copy plays even while the previous sound is still playing.
+        (NSSound(named: name)?.copy() as? NSSound)?.play()
     }
 
     func menuWillOpen(_ menu: NSMenu) {
