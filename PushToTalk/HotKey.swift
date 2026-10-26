@@ -6,98 +6,84 @@
 //  Copyright © 2020 yulrizka. All rights reserved.
 //
 
-import Foundation
 import AppKit
 
-class HotKey {
-    var doubletap = false
-    var previousEpoc = NSDate().timeIntervalSince1970
+final class HotKey {
+    static let relevantModifiers: NSEvent.ModifierFlags = [.shift, .control, .option, .command, .function]
+    private static let keyCodeKey = "prefKeyCode"
+    private static let modifiersKey = "prefModifier"
+    private static let defaultKeyCode: UInt16 = 61 // Right Option
+    private static let doubleTapInterval: TimeInterval = 0.2
 
-    let prefKeyCode = "prefKeyCode"
-    let prefModifiers = "prefModifier"
-
-    let microphone: Microphone
-    let menuItem: NSMenuItem
-
-    var keyCode: UInt16
-    var modifierFlags:NSEvent.ModifierFlags
-    let defaultKeyCode: UInt16 = 61
-    let defaultModifierFlags = NSEvent.ModifierFlags.option
-
-    var recordingHotKey = false;
+    private let microphone: Microphone
+    private let menuItem: NSMenuItem
+    private var keyCode: UInt16
+    private var modifierFlags: NSEvent.ModifierFlags
+    private var recordingHotKey = false
+    private var lastPressTime: TimeInterval = 0
+    private var lockedOpen = false
 
     init(microphone: Microphone, menuItem: NSMenuItem) {
-        self.keyCode = defaultKeyCode
-        self.modifierFlags = defaultModifierFlags
-
-        // load key from preference
-        if UserDefaults.standard.object(forKey: prefKeyCode) != nil {
-            self.keyCode = UInt16(UserDefaults.standard.integer(forKey: prefKeyCode))
-        }
-        if UserDefaults.standard.object(forKey: prefModifiers) != nil {
-            let modifierFlags:UInt = UInt(UserDefaults.standard.integer(forKey: prefModifiers))
-            self.modifierFlags = NSEvent.ModifierFlags(rawValue: modifierFlags)
-        }
-
-
-        self.menuItem = menuItem
-        let keyString = KeyCodeHelper.keyChars(keyCode: self.keyCode)
-        self.menuItem.title = "Change HotKey (\(keyString))"
-
         self.microphone = microphone
-        // handle when application is on background
-        NSEvent.addGlobalMonitorForEvents(matching: NSEvent.EventTypeMask.flagsChanged, handler: self.handleFlagChangedEvent)
+        self.menuItem = menuItem
+        let defaults = UserDefaults.standard
+        let savedFlags = NSEvent.ModifierFlags(rawValue: UInt(defaults.integer(forKey: Self.modifiersKey))).intersection(Self.relevantModifiers)
+        // Old versions could save a caps lock hotkey, which has no relevant flag and would never mute.
+        if defaults.object(forKey: Self.keyCodeKey) == nil || savedFlags.isEmpty {
+            keyCode = Self.defaultKeyCode
+            modifierFlags = .option
+        } else {
+            keyCode = UInt16(truncatingIfNeeded: defaults.integer(forKey: Self.keyCodeKey))
+            modifierFlags = savedFlags
+        }
+        updateMenuTitle()
+        NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in self?.handle(event) }
+        NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            self?.handle(event)
+            return event
+        }
+    }
 
-        // handle when application is on foreground
-        NSEvent.addLocalMonitorForEvents(matching: NSEvent.EventTypeMask.flagsChanged, handler: { (theEvent) -> NSEvent? in
-            self.handleFlagChangedEvent(theEvent)
-            return theEvent
-        })
+    static func matches(_ eventFlags: NSEvent.ModifierFlags, hotkey: NSEvent.ModifierFlags) -> Bool {
+        eventFlags.intersection(relevantModifiers) == hotkey.intersection(relevantModifiers)
     }
 
     func toggle() {
-        doubletap = false
+        recordingHotKey = false
+        lockedOpen = false
         microphone.status = microphone.status == .disabled ? .muted : .disabled
     }
 
     func recordNewHotKey() {
-        recordingHotKey = true;
+        recordingHotKey = true
         microphone.status = .recordingHotKey
     }
 
-    func checkForDoubleTap() {
-        let timeInterval = NSDate().timeIntervalSince1970
-        let timediff = timeInterval - self.previousEpoc
-        self.previousEpoc = timeInterval
-        self.doubletap = timediff < 0.2
+    private func updateMenuTitle() {
+        menuItem.title = "Change HotKey (\(KeyCodeHelper.keyChars(keyCode: keyCode)))"
     }
 
-    internal func handleFlagChangedEvent(_ theEvent: NSEvent!) {
-        if self.recordingHotKey {
-            let flags = theEvent.modifierFlags.intersection([.shift, .control, .option, .command, .function])
+    private func handle(_ event: NSEvent) {
+        let flags = event.modifierFlags.intersection(Self.relevantModifiers)
+        if recordingHotKey {
             guard !flags.isEmpty else { return } // caps lock and similar keys carry no modifier flag
-            self.recordingHotKey = false
-            self.keyCode = theEvent.keyCode
-            self.modifierFlags = flags
-            let keyString = KeyCodeHelper.keyChars(keyCode: theEvent.keyCode)
-            self.menuItem.title = "Change HotKey (\(keyString))"
-
-            UserDefaults.standard.set(Int(self.keyCode), forKey: prefKeyCode)
-            UserDefaults.standard.set(Int(self.modifierFlags.rawValue), forKey: prefModifiers)
+            recordingHotKey = false
+            keyCode = event.keyCode
+            modifierFlags = flags
+            UserDefaults.standard.set(Int(keyCode), forKey: Self.keyCodeKey)
+            UserDefaults.standard.set(Int(modifierFlags.rawValue), forKey: Self.modifiersKey)
+            updateMenuTitle()
             microphone.status = .muted
             return
         }
-        guard theEvent.keyCode == self.keyCode else { return }
-        guard microphone.status != .disabled else { return }
-
-        if theEvent.modifierFlags.contains(self.modifierFlags) {
-            checkForDoubleTap()
+        guard event.keyCode == keyCode, microphone.status != .disabled else { return }
+        if Self.matches(event.modifierFlags, hotkey: modifierFlags) {
+            // Pressed with no other modifier held.
+            lockedOpen = event.timestamp - lastPressTime < Self.doubleTapInterval
+            lastPressTime = event.timestamp
             microphone.status = .speaking
-        } else {
-            if (!self.doubletap) {
-                microphone.status = .muted
-                doubletap = false
-            }
+        } else if !flags.isSuperset(of: modifierFlags), !lockedOpen {
+            microphone.status = .muted
         }
     }
 }
