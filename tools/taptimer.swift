@@ -1,13 +1,13 @@
 // Measures how you press the PushToTalk hotkey: how long you hold it and how fast you tap it twice.
 // Build and run from the repository root:
-//   swiftc -O -o build/taptimer tools/taptimer.swift && build/taptimer
-// Optional argument: the key code to watch (default: the hotkey saved by PushToTalk, or fn = 63).
+//   mkdir -p build && swiftc -O -o build/taptimer tools/taptimer.swift && build/taptimer
+// Optional argument: the key code to watch (default: the hotkey saved by PushToTalk, or Right Option = 61).
 // Press the key the way you normally use it, then press Ctrl-C in Terminal to print the summary.
 import AppKit
 
 let keyCode: UInt16 = CommandLine.arguments.dropFirst().first.flatMap { UInt16($0) }
     ?? (UserDefaults(suiteName: "com.yulrizka.PushToTalk")?.object(forKey: "prefKeyCode") as? Int).map { UInt16($0) }
-    ?? 63
+    ?? 61
 let flagForKey: [UInt16: NSEvent.ModifierFlags] = [
     0x3F: .function, 0x3A: .option, 0x3D: .option, 0x37: .command, 0x36: .command,
     0x38: .shift, 0x3C: .shift, 0x3B: .control, 0x3E: .control, 0x39: .capsLock,
