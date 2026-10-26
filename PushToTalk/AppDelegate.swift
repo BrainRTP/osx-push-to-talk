@@ -10,7 +10,7 @@ import Cocoa
 import AudioToolbox
 import AVKit
 
-@NSApplicationMain
+@main
 
 class AppDelegate: NSObject, NSApplicationDelegate {
 

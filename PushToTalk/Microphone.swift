@@ -10,7 +10,7 @@ import Cocoa
 import AudioToolbox
 import Carbon.HIToolbox
 
-class DeviceMenuItem: NSMenuItem {
+nonisolated class DeviceMenuItem: NSMenuItem {
     var inputDevice: InputDevice?
 }
 
@@ -84,7 +84,7 @@ extension Microphone {
         var inputDevices: [InputDevice] = []
 
         // Construct the address of the property which holds all available devices
-        var devicesPropertyAddress = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDevices, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMaster)
+        var devicesPropertyAddress = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDevices, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
         var propertySize = UInt32(0)
 
         // Get the size of the property in the kAudioObjectSystemObject so we can make space to store it
@@ -108,7 +108,7 @@ extension Microphone {
             // Get the device name for fun
             var name: CFString = "" as CFString
             var propertySize = UInt32(MemoryLayout<CFString>.size)
-            var deviceNamePropertyAddress = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyDeviceNameCFString, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMaster)
+            var deviceNamePropertyAddress = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyDeviceNameCFString, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
             try handle(AudioObjectGetPropertyData(id, &deviceNamePropertyAddress, 0, nil, &propertySize, &name))
 
             // Check the input scope of the device for any channels. That would mean it's an input device
@@ -151,7 +151,7 @@ extension Microphone {
             var address = AudioObjectPropertyAddress(
                 mSelector: AudioObjectPropertySelector(kAudioDevicePropertyMute),
                 mScope: AudioObjectPropertyScope(kAudioDevicePropertyScopeInput),
-                mElement: AudioObjectPropertyElement(kAudioObjectPropertyElementMaster))
+                mElement: AudioObjectPropertyElement(kAudioObjectPropertyElementMain))
             
             let size = UInt32(MemoryLayout<UInt32>.size)
             var mute:UInt32 = muted ? 1 : 0;
